@@ -1,0 +1,220 @@
+<html ng-app="dragTest">
+  <head>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js" type="text/javascript"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js" type="text/javascript"></script>
+    <script src="http://code.angularjs.org/1.2.1/angular.min.js" type="text/javascript"></script>
+    <script src="http://code.angularjs.org/1.2.1/angular-sanitize.min.js"></script>
+    <style>
+      .cursor {
+        cursor: move;
+      }
+
+      .well {
+        margin: 0;
+      }
+
+      .read-out {
+        margin-top: 30px;
+      }
+
+      .dragging {
+        margin: -1px;
+        border: 1px dashed #ccc;
+      }
+
+      .drop-area {
+        border: 2px dashed #ccc;
+        width: 100%;
+        min-height: 200px;
+      }
+
+      .content {
+        padding: 5px;
+      }
+    </style>
+  </head>
+  <body class="container">
+    
+    <div ng-controller="dragCtrlr">
+      
+      <div draggable jui-options="{addClasses: false,revert: true}" template="/tmpls/myTemplate" id="draggable-1" group="content" data="{title: 'My Title',content: 'My content as I see it!'}" placeholder="true"></div>
+      
+      <draggable jui-options="{addClasses: false,cursor: 'move',revert: true}" template="/tmpls/myTemplate" id="draggable-2" group="content" placeholder="true" data="{title: 'Hello There',content: 'Some content here :)',template: '/tmpls/data-tmpl2'}"></draggable>
+      
+      <draggable options="{opacity: .5,revert: true}" placeholder="true">Draggable 3's content!!<ul><li>I'm not grouped with the others</li><li>have no ID</li><li>and use the default template</li></ul></draggable>
+      
+      <br>
+      <h4>Drop Area</h4>
+      <div droppable jui-options="{addClasses: false}" class="drop-area"></div>
+      
+      <div class="read-out">
+        <span class="text-info"><strong>Draggable ID</strong></span>: {{obj.id}}<br><br>
+        <span class="text-info"><strong>Content</strong></span>: <span ng-bind-html="obj.content"></span><br><br>
+        <span class="text-info"><strong>Actual Content</strong></span>: {{obj.content}}<br><br>
+      </div>
+    </div>
+    <script type="text/javascript">
+      angular.module('dragTest',['ngSanitize'])
+
+.run(['$templateCache',function($templateCache){
+  
+  // defaults
+  $templateCache.put('/tmpls/draggable-default','<div class="cursor">{{title}}</div>');
+  
+  $templateCache.put('/tmpls/data-tmpl-default','<div><h1 style="color: blue;">{{title}}</h1><p>{{content}}</p></div>');
+  
+  
+  // draggable template
+  $templateCache.put('/tmpls/myTemplate','<div class="well cursor {{obj.group}}">{{obj.title}}</div>');
+  
+  // data templates
+  $templateCache.put('/tmpls/data-tmpl','<div><h2>{{title}}</h2><div>{{content}}</div></div>');
+  
+  $templateCache.put('/tmpls/data-tmpl2','<div class="panel panel-primary cursor"><div class="panel-heading"><h3 class="panel-title">{{title}}</h3></div><div class="panel-body">{{content}}</div></div>');
+  
+  // droppable
+  $templateCache.put('/tmpls/droppable-default','<div class="content"></div>');
+}]) // end run
+
+.controller('dragCtrlr',['$scope','$log',function($scope,$log){
+  // variables
+  var obj = {};
+  
+  $scope.obj = angular.copy(obj);
+  
+  // listeners
+  
+  $scope.$on('drag.started',function(evt,data){
+    if(angular.isDefined(data.obj))
+      $scope.obj = data.obj;
+  });
+  
+  $scope.$on('drag.stopped',function(evt,data){
+    // $scope.obj = angular.copy(obj); // reset controller's object
+  });
+  
+  $scope.$on('data.clean',function(evt,data){
+    $scope.obj = angular.copy(obj); // reset controller's object
+  });
+}]) // end controller(dragCtrlr)
+
+
+
+.directive('draggable',['$log',function($log){
+  return {
+    restrict: 'AE',
+    replace: true,
+    transclude: false,
+    scope: {
+       id: '@',
+       options: '@juiOptions',
+       data: '@',
+       placeholder: '@',
+       group: '@'
+    },
+    templateUrl: function(el,attrs){
+      return (angular.isDefined(attrs.template)) ? attrs.template : '/tmpls/draggable-default';
+    },
+    link: function(scope,el,attrs){
+      // eval json object attribute params
+      scope.obj = (angular.isDefined(scope.data)) ? scope.$eval(scope.data) : {};
+      scope.placeholder = (angular.isDefined(scope.placeholder)) ? scope.$eval(scope.placeholder) : false;
+      scope.options = (angular.isDefined(scope.options)) ? scope.$eval(scope.options) : {};
+      
+      if(angular.isDefined(scope.id))
+        scope.obj.id = scope.id;
+      
+      // assign the object's group if any
+      if(angular.isDefined(scope.group)){
+        scope.obj.group = scope.group;
+        scope.options.stack = '.' + scope.group;
+      }
+      
+      var evts = {
+        start: function(evt,ui){
+          if(scope.placeholder)
+            ui.helper.wrap('<div class="dragging"></div>');
+          scope.$apply(function(){ scope.$emit('drag.started',{obj: scope.obj}); });
+        },
+        drag: function(evt){
+          scope.$apply(function(){ scope.$emit('drag.dragging',{obj: scope.obj}); });
+        },
+        stop: function(evt,ui){
+          if(scope.placeholder)
+            ui.helper.unwrap();
+          scope.$apply(function(){ scope.$emit('drag.stopped',{obj: scope.obj}); });
+        }
+      }; // end evts
+      
+      // combine options passed through element attributes with events
+      scope.options = angular.extend({},scope.options,evts);
+      el.draggable(scope.options); // make element draggable
+    } // end link
+  }; // end return
+}]) // end directive(draggable)
+
+.directive('droppable',['$compile','$templateCache','$log',function($compile,$templateCache,$log){
+  return {
+    restrict: 'AE',
+    replace: true,
+    scope: {
+     id: '@',
+     options: '@juiOptions'
+    },
+    templateUrl: function(el,attrs){
+      return (angular.isDefined(attrs.template)) ? attrs.template : '/tmpls/droppable-default';
+    },
+    link: function(scope,el,attrs,ctrlr,transFn){
+      scope.options = (angular.isDefined(scope.options)) ? scope.$eval(scope.options) : {};
+      scope.obj = {
+        id: null,
+        dropped: []
+      };
+      
+      scope.$watch(function(){
+          return scope.obj.dropped.length;
+        },function(n,o){
+          if(!angular.equals(n,0)){
+            var val = scope.obj.dropped[(n-1)];
+            if(angular.isDefined(val)){
+              var tmpl = '';
+              if(angular.isDefined(val.template)){
+                tmpl = ($templateCache.get(val.template)).toString();
+              }else{
+                tmpl = ($templateCache.get('/tmpls/data-tmpl-default')).toString();  
+              }
+              var childScope = scope.$new(true);
+              angular.forEach(val,function(v,k){
+                childScope[k] = v;
+              });
+      
+              $compile(tmpl)(childScope,function(clone){ 
+                el.append(clone);
+              });
+            }
+          }
+        }); // end scope.$watch()
+
+      // save the object's id if there is one
+      if(angular.isDefined(scope.id))
+        scope.obj.id = scope.id;
+      
+      var evts = {
+        drop: function(evt,ui){ // apply content
+          scope.$apply(function(){
+            scope.obj.dropped.push(angular.copy(scope.$parent.obj));
+            scope.$emit('data.clean');
+          });
+        }
+      };
+      
+      scope.options = angular.extend({},scope.options,evts);
+      el.droppable(scope.options);
+      console.log(el);
+    } // end link
+     
+  }; // end return
+}]); // end directive(droppable)
+    </script>
+  </body>
+</html>
